@@ -23,32 +23,59 @@ class FlutterMapMath {
     return distanceInKm;
   }
 
+  // Constants defined by the WGS-84 ellipsoid model
+  final double a = 6378137.0; // Semi-major axis
+  final double b = 6356752.314245; // Semi-minor axis
+  final double f = 1 / 298.257223563; // Flattening
+
+
   /// Returns distance between two locations on earth
-  double distanceBetween(
-      double lat1, double lon1, double lat2, double lon2, String unit) {
-    const earthRadius = 6371; // in km
-    // assuming earth is a perfect sphere(it's not)
+double distanceBetween(double lat1, double lon1, double lat2, double lon2, String unit) {
+  // Convert latitude and longitude from degrees to radians
+  double U1 = atan((1 - f) * tan(degreesToRadians(lat1)));
+  double U2 = atan((1 - f) * tan(degreesToRadians(lat2)));
+  double L = degreesToRadians(lon2 - lon1);
+  double lambda = L;
+  double lambdaP;
+  int iterLimit = 100;
 
-    // Convert degrees to radians
-    final lat1Rad = degreesToRadians(lat1);
-    final lon1Rad = degreesToRadians(lon1);
-    final lat2Rad = degreesToRadians(lat2);
-    final lon2Rad = degreesToRadians(lon2);
+  double sinSigma, cosSigma, sigma, sinAlpha, cosSqAlpha, cos2SigmaM, C;
+  do {
+    double sinLambda = sin(lambda);
+    double cosLambda = cos(lambda);
+    sinSigma = sqrt((pow(cos(U2) * sinLambda, 2)) +
+                    (pow(cos(U1) * sin(U2) - sin(U1) * cos(U2) * cosLambda, 2)));
+    if (sinSigma == 0) {
+      return 0;  // co-incident points
+    }
+    cosSigma = sin(U1) * sin(U2) + cos(U1) * cos(U2) * cosLambda;
+    sigma = atan2(sinSigma, cosSigma);
+    sinAlpha = cos(U1) * cos(U2) * sinLambda / sinSigma;
+    cosSqAlpha = 1 - pow(sinAlpha, 2) as double;
+    cos2SigmaM = cosSigma - 2 * sin(U1) * sin(U2) / cosSqAlpha;
+    if (cos2SigmaM.isNaN) {
+      cos2SigmaM = 0;  // equatorial line
+    }
+    C = f / 16 * cosSqAlpha * (4 + f * (4 - 3 * cosSqAlpha));
+    lambdaP = lambda;
+    lambda = L + (1 - C) * f * sinAlpha *
+             (sigma + C * sinSigma * (cos2SigmaM + C * cosSigma * (-1 + 2 * cos2SigmaM * cos2SigmaM)));
+  } while ((lambda - lambdaP).abs() > 1e-12 && --iterLimit > 0);
 
-    final dLat = lat2Rad - lat1Rad;
-    final dLon = lon2Rad - lon1Rad;
-
-    // Haversine formula
-    final a = pow(sin(dLat / 2), 2) +
-        cos(lat1Rad) * cos(lat2Rad) * pow(sin(dLon / 2), 2);
-    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
-
-    final distance = earthRadius * c;
-
-    return toRequestedUnit(unit, distance);
-
-    // return distance; // in km
+  if (iterLimit == 0) {
+    return double.nan;  // formula failed to converge
   }
+
+  double uSq = cosSqAlpha * (a * a - b * b) / (b * b);
+  double A = 1 + uSq / 16384 * (4096 + uSq * (-768 + uSq * (320 - 175 * uSq)));
+  double B = uSq / 1024 * (256 + uSq * (-128 + uSq * (74 - 47 * uSq)));
+  double deltaSigma = B * sinSigma * (cos2SigmaM + B / 4 * (cosSigma * (-1 + 2 * cos2SigmaM * cos2SigmaM) -
+                      B / 6 * cos2SigmaM * (-3 + 4 * sinSigma * sinSigma) * (-3 + 4 * cos2SigmaM * cos2SigmaM)));
+
+  double s = b * A * (sigma - deltaSigma) / 1000;
+
+  return toRequestedUnit(unit, s);
+}
 
   /// Returns bearing angle in degrees.
   /// Bearing angle => A bearing describes a line as heading north or south, and
