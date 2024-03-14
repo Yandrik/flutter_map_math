@@ -59,8 +59,8 @@ class FlutterMapMath {
     var y = sin(dLon) * cos(degreesToRadians(lat2));
     var x = cos(degreesToRadians(lat1)) * sin(degreesToRadians(lat2)) -
         sin(degreesToRadians(lat1)) * cos(degreesToRadians(lat2)) * cos(dLon);
-    var angle = degreesToRadians(atan2(y, x));
-    return (angle + 360) % 360;
+    var angle = atan2(y, x);
+    return (radiansToDegrees(angle) + 360) % 360;
   }
 
   /// Uses a point, distance and bearing anlge to find the destination point.
